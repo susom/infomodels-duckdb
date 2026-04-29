@@ -1,0 +1,59 @@
+name: build
+on:
+  push:
+    branches-ignore:
+      - main
+
+# Several third-party actions still bundle Node.js 20 dependencies:
+# pre-commit/action@v3.0.1 (actions/cache@v4), docker/build-push-action@v6,
+# docker/setup-buildx-action@v3, google-github-actions/auth@v2,
+# google-github-actions/setup-gcloud@v2.
+# Periodically check for newer versions of these actions to remove this override.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    env:
+      PROJECT: ${{ secrets.PROJECT }}
+      REGISTRY: ${{ secrets.REGISTRY }}
+      REPOSITORY: ${{ secrets.REPOSITORY }}
+
+    permissions:
+      contents: 'write'
+      id-token: 'write'
+
+    runs-on: ubuntu-latest-64GB-RAM
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.PROJECT }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v2'
+        with:
+          version: '>= 363.0.0'
+
+      - name: Authenticate to GAR
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          provenance: false
+          cache-from: type=gha,scope=build-amd64
+          cache-to: type=gha,mode=max,scope=build-amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.PROJECT }}/${{ env.REPOSITORY }}/infomodels-duckdb:latest
