@@ -13,5 +13,8 @@ tmp
 # Ignore dev
 .dev
 
+# Ignore credentials
+gha-creds-*.json
+
 # Ignore production config
 config.yml
